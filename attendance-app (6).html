@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+<title>נוכחות עובדים</title>
+<meta name="theme-color" content="#0f172a"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',Arial,sans-serif;direction:rtl;background:#0f172a;min-height:100vh;color:white;}
+button,input{font-family:inherit;cursor:pointer;}
+table{border-collapse:collapse;width:100%;}
+th{background:#1e3a5f;color:#90cdf4;font-weight:700;font-size:13px;padding:10px 6px;text-align:center;position:sticky;top:0;z-index:2;}
+td{padding:8px 6px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:center;font-size:13px;}
+tr:nth-child(even) td{background:rgba(255,255,255,0.02);}
+tr:hover td{background:rgba(255,255,255,0.05);}
+.name-cell{text-align:right;padding-right:12px;font-weight:500;color:rgba(255,255,255,0.9);white-space:nowrap;}
+.radio-btn{width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);background:transparent;font-size:16px;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.radio-btn:hover{transform:scale(1.15);}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+@media print{
+  .no-print{display:none!important;}
+  body{background:white;color:black;}
+  th{background:#dbeafe;color:#1e3a5f;}
+  td{border-bottom:1px solid #e2e8f0;}
+  .name-cell{color:#1a202c;}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script type="text/babel">
+const {useState,useEffect}=React;
+
+const NAMES=[
+  "אורלי","אורן","אורנה","איל","אינה","אלמוג","אסתי ברוכי","אריה","ג'וס","דוד",
+  "הילה בסאן","הילה מורי","חיה","חיה טוויל","חלי","חלי כהן","חן אמר","טל","טל מדלסי",
+  "כוכבה","לנה","מיטל","מירב","מירי","מלי","סוסו","סילבי ברכה","סילבי חן",
+  "עדי אמר","עדי גיא","עדי שטיינר","ליאם","עינת","פרננדה","קלמן","רבקה בר","רויטל",
+  "רעות גרימברג","שירה חרבי","תקוה","טניה","ענת","קארין","דוניא","אנה","גילי","מורן",
+  "מיקי","עדי","צליל סער","רעות אינגבר","שירלי","אלעד","ליטל","לילב","ורד נשטיר",
+  "ספיר מנור","אורון","אסתי","גלית","רונית","זויה","כוכי","מור","נטלי","שרית",
+  "אלון","סיגל","חנית","מתן","אלגריה","מריאנה"
+];
+
+const COLS=[
+  {id:"present", label:"נמצא",       emoji:"✅", color:"#22c55e", bg:"rgba(34,197,94,0.18)"},
+  {id:"sick",    label:"מחלה",       emoji:"🤒", color:"#f97316", bg:"rgba(249,115,22,0.18)"},
+  {id:"vacation",label:"חופש",       emoji:"🏖️", color:"#3b82f6", bg:"rgba(59,130,246,0.18)"},
+  {id:"wfh",     label:"עובד מהבית", emoji:"🏠", color:"#a855f7", bg:"rgba(168,85,247,0.18)"},
+];
+
+const SK="att_v4";
+const load=()=>{try{const r=localStorage.getItem(SK);return r?JSON.parse(r):null;}catch{return null;}};
+const persist=s=>{try{localStorage.setItem(SK,JSON.stringify(s));}catch{}};
+
+const todayKey=()=>{
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+};
+const fmtDate=()=>new Date().toLocaleDateString("he-IL",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+
+function App(){
+  const today=todayKey();
+  const [att,setAtt]=useState(()=>{
+    const s=load();
+    return s&&s.date===today ? s.att : {};
+  });
+  const [employees,setEmployees]=useState(()=>{
+    const s=load();
+    return s&&s.employees ? s.employees : NAMES;
+  });
+  const [newName,setNewName]=useState("");
+  const [adminOpen,setAdminOpen]=useState(false);
+  const [search,setSearch]=useState("");
+  const [activeTab,setActiveTab]=useState("table");
+
+  useEffect(()=>{
+    persist({date:today,att,employees});
+  },[att,employees]);
+
+  const setStatus=(name,statusId)=>{
+    setAtt(prev=>{
+      const cur=prev[name];
+      // לחיצה שנייה על אותו סטטוס – מבטלת
+      return {...prev,[name]: cur===statusId ? null : statusId};
+    });
+  };
+
+  const addEmp=()=>{
+    if(!newName.trim()||employees.includes(newName.trim())) return;
+    setEmployees(prev=>[...prev,newName.trim()]);
+    setNewName("");
+  };
+
+  const removeEmp=name=>setEmployees(prev=>prev.filter(e=>e!==name));
+
+  const resetAll=()=>{if(window.confirm("לאפס את כל הנוכחות להיום?")) setAtt({});};
+
+  const printTable=()=>window.print();
+
+  // סיכומים
+  const counts={};
+  COLS.forEach(c=>{counts[c.id]=Object.values(att).filter(v=>v===c.id).length;});
+  const noReport=employees.filter(n=>!att[n]).length;
+
+  const filtered=search.trim() ? employees.filter(n=>n.includes(search.trim())) : employees;
+
+  return(
+    <div style={{minHeight:"100vh",background:"#0f172a",paddingBottom:30}}>
+
+      {/* Header */}
+      <div className="no-print" style={{background:"linear-gradient(135deg,#1e293b,#1e1060)",padding:"14px 16px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+          <div>
+            <div style={{fontWeight:800,fontSize:17}}>📋 נוכחות עובדים</div>
+            <div style={{color:"rgba(255,255,255,0.45)",fontSize:12,marginTop:2}}>{fmtDate()}</div>
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button onClick={printTable}
+              style={{background:"linear-gradient(135deg,#6366f1,#3b82f6)",color:"white",border:"none",borderRadius:9,padding:"7px 14px",fontWeight:700,fontSize:13}}>
+              🖨️ הדפס
+            </button>
+            <button onClick={resetAll}
+              style={{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",color:"#f87171",borderRadius:9,padding:"7px 14px",fontSize:13}}>
+              🔄 איפוס
+            </button>
+          </div>
+        </div>
+
+        {/* סיכום */}
+        <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+          {COLS.map(c=>(
+            <div key={c.id} style={{background:c.bg,border:`1px solid ${c.color}55`,borderRadius:10,padding:"5px 12px",display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:16}}>{c.emoji}</span>
+              <span style={{color:c.color,fontWeight:700,fontSize:15}}>{counts[c.id]}</span>
+              <span style={{color:"rgba(255,255,255,0.5)",fontSize:11}}>{c.label}</span>
+            </div>
+          ))}
+          <div style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"5px 12px",display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:16}}>❓</span>
+            <span style={{color:"rgba(255,255,255,0.6)",fontWeight:700,fontSize:15}}>{noReport}</span>
+            <span style={{color:"rgba(255,255,255,0.4)",fontSize:11}}>לא דיווחו</span>
+          </div>
+        </div>
+      </div>
+
+      {/* לשוניות */}
+      <div className="no-print" style={{padding:"12px 14px 0",display:"flex",gap:8}}>
+        {[{id:"table",label:"📋 מילוי נוכחות"},{id:"summary",label:"📊 סיכום"}].map(t=>(
+          <button key={t.id} onClick={()=>setActiveTab(t.id)}
+            style={{padding:"8px 16px",borderRadius:10,border:"none",fontWeight:700,fontSize:13,
+              background:activeTab===t.id?"linear-gradient(135deg,#6366f1,#3b82f6)":"rgba(255,255,255,0.07)",
+              color:activeTab===t.id?"white":"rgba(255,255,255,0.5)"}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* חיפוש */}
+      <div className="no-print" style={{padding:"10px 14px 0",display:activeTab==="table"?"block":"none"}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="🔍 חיפוש עובד..."
+          style={{width:"100%",padding:"9px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",
+            background:"rgba(255,255,255,0.06)",color:"white",fontSize:13,outline:"none"}}/>
+      </div>
+
+      {/* טבלת מילוי */}
+      <div style={{padding:"12px 14px 0",overflowX:"auto",display:activeTab==="table"?"block":"none"}}>
+        <table>
+          <thead>
+            <tr>
+              <th style={{textAlign:"right",paddingRight:12,minWidth:120}}>שם</th>
+              {COLS.map(c=>(
+                <th key={c.id} style={{minWidth:72}}>
+                  <div>{c.emoji}</div>
+                  <div style={{fontSize:11,marginTop:2}}>{c.label}</div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(name=>{
+              const cur=att[name]||null;
+              return(
+                <tr key={name}>
+                  <td className="name-cell">{name}</td>
+                  {COLS.map(c=>(
+                    <td key={c.id}>
+                      <button
+                        onClick={()=>setStatus(name,c.id)}
+                        className="radio-btn"
+                        style={{
+                          background: cur===c.id ? c.bg : "transparent",
+                          borderColor: cur===c.id ? c.color : "rgba(255,255,255,0.15)",
+                          color: cur===c.id ? c.color : "rgba(255,255,255,0.2)",
+                        }}>
+                        {cur===c.id ? c.emoji : "○"}
+                      </button>
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {filtered.length===0&&(
+          <div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",padding:30,fontSize:14}}>לא נמצאו עובדים</div>
+        )}
+      </div>
+
+      {/* ניהול עובדים */}
+      <div className="no-print" style={{padding:"14px 14px 0",display:activeTab==="table"?"block":"none"}}>
+
+      {/* לשונית סיכום */}
+      {activeTab==="summary"&&(
+        <div style={{padding:"14px 14px 0"}}>
+          {COLS.map(c=>{
+            const list=employees.filter(n=>att[n]===c.id);
+            return list.length===0?null:(
+              <div key={c.id} style={{background:"#1e293b",borderRadius:14,border:`1px solid ${c.color}44`,
+                padding:14,marginBottom:12}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                  <span style={{fontSize:22}}>{c.emoji}</span>
+                  <span style={{color:c.color,fontWeight:700,fontSize:15}}>{c.label}</span>
+                  <span style={{background:c.bg,color:c.color,borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:700,marginRight:"auto"}}>{list.length}</span>
+                </div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <tbody>
+                    {list.map((n,i)=>(
+                      <tr key={n}>
+                        <td style={{padding:"6px 8px",borderBottom:"1px solid rgba(255,255,255,0.05)",
+                          color:"rgba(255,255,255,0.85)",fontSize:13}}>
+                          <span style={{color:"rgba(255,255,255,0.3)",marginLeft:8,fontSize:11}}>{i+1}.</span>{n}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+          {/* לא דיווחו */}
+          {(()=>{
+            const list=employees.filter(n=>!att[n]);
+            return list.length===0?null:(
+              <div style={{background:"#1e293b",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",padding:14,marginBottom:12}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                  <span style={{fontSize:22}}>❓</span>
+                  <span style={{color:"rgba(255,255,255,0.5)",fontWeight:700,fontSize:15}}>לא דיווחו</span>
+                  <span style={{background:"rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.5)",borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:700,marginRight:"auto"}}>{list.length}</span>
+                </div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <tbody>
+                    {list.map((n,i)=>(
+                      <tr key={n}>
+                        <td style={{padding:"6px 8px",borderBottom:"1px solid rgba(255,255,255,0.05)",
+                          color:"rgba(255,255,255,0.45)",fontSize:13}}>
+                          <span style={{color:"rgba(255,255,255,0.2)",marginLeft:8,fontSize:11}}>{i+1}.</span>{n}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+          {employees.every(n=>att[n])&&(
+            <div style={{textAlign:"center",padding:30,color:"#22c55e",fontSize:15,fontWeight:700}}>
+              ✅ כל העובדים דיווחו היום!
+            </div>
+          )}
+        </div>
+      )}
+        <div style={{background:"#1e293b",borderRadius:14,border:"1px solid rgba(255,255,255,0.08)",padding:14}}>
+          <button onClick={()=>setAdminOpen(!adminOpen)}
+            style={{background:"transparent",border:"none",color:"rgba(255,255,255,0.5)",fontSize:13,width:"100%",textAlign:"right",padding:0,display:"flex",justifyContent:"space-between"}}>
+            <span>⚙️ ניהול רשימת עובדים ({employees.length})</span>
+            <span>{adminOpen?"▲":"▼"}</span>
+          </button>
+          {adminOpen&&(
+            <div style={{marginTop:14}}>
+              <div style={{display:"flex",gap:8,marginBottom:12}}>
+                <input value={newName} onChange={e=>setNewName(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&addEmp()}
+                  placeholder="שם עובד חדש..."
+                  style={{flex:1,padding:"9px 12px",borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",
+                    background:"rgba(255,255,255,0.05)",color:"white",fontSize:13,outline:"none"}}/>
+                <button onClick={addEmp}
+                  style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",color:"white",border:"none",
+                    borderRadius:10,padding:"9px 14px",fontWeight:700,fontSize:13}}>+ הוסף</button>
+              </div>
+              <div style={{maxHeight:180,overflowY:"auto"}}>
+                {employees.map(n=>(
+                  <div key={n} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                    padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
+                    <span style={{fontSize:13,color:"rgba(255,255,255,0.75)"}}>{n}</span>
+                    <button onClick={()=>removeEmp(n)}
+                      style={{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",
+                        color:"#f87171",borderRadius:8,padding:"3px 10px",fontSize:12}}>הסר</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("app")).render(React.createElement(App));
+</script>
+</body>
+</html>
